@@ -11,7 +11,7 @@ export class SigninRequest {
         url, client_id, redirect_uri, response_type, scope, authority,
         // optional
         data, prompt, display, max_age, ui_locales, id_token_hint, login_hint, acr_values, resource, response_mode,
-        request, request_uri, extraQueryParams, request_type, client_secret, extraTokenParams, skipUserInfo
+        request, request_uri, extraQueryParams, request_type, client_secret, extraTokenParams, skipUserInfo, single_session_id
     }) {
         if (!url) {
             Log.error("SigninRequest.ctor: No url passed");
@@ -45,11 +45,13 @@ export class SigninRequest {
             response_mode = SigninRequest.isCode(response_type) ? "query" : null;
         }
 
-        this.state = new SigninState({ nonce: oidc, 
-            data, client_id, authority, redirect_uri, 
-            code_verifier: code, 
+        this.state = new SigninState({
+            nonce: oidc,
+            data, client_id, authority, redirect_uri,
+            code_verifier: code,
             request_type, response_mode,
-            client_secret, scope, extraTokenParams, skipUserInfo });
+            client_secret, scope, extraTokenParams, skipUserInfo
+        });
 
         url = UrlUtility.addQueryParam(url, "client_id", client_id);
         url = UrlUtility.addQueryParam(url, "redirect_uri", redirect_uri);
@@ -65,14 +67,14 @@ export class SigninRequest {
             url = UrlUtility.addQueryParam(url, "code_challenge_method", "S256");
         }
 
-        var optional = { prompt, display, max_age, ui_locales, id_token_hint, login_hint, acr_values, resource, request, request_uri, response_mode };
-        for(let key in optional){
+        var optional = { prompt, display, max_age, ui_locales, id_token_hint, login_hint, acr_values, resource, request, request_uri, response_mode, single_session_id };
+        for (let key in optional) {
             if (optional[key]) {
                 url = UrlUtility.addQueryParam(url, key, optional[key]);
             }
         }
 
-        for(let key in extraQueryParams){
+        for (let key in extraQueryParams) {
             url = UrlUtility.addQueryParam(url, key, extraQueryParams[key])
         }
 
@@ -80,21 +82,21 @@ export class SigninRequest {
     }
 
     static isOidc(response_type) {
-        var result = response_type.split(/\s+/g).filter(function(item) {
+        var result = response_type.split(/\s+/g).filter(function (item) {
             return item === "id_token";
         });
         return !!(result[0]);
     }
 
     static isOAuth(response_type) {
-        var result = response_type.split(/\s+/g).filter(function(item) {
+        var result = response_type.split(/\s+/g).filter(function (item) {
             return item === "token";
         });
         return !!(result[0]);
     }
-    
+
     static isCode(response_type) {
-        var result = response_type.split(/\s+/g).filter(function(item) {
+        var result = response_type.split(/\s+/g).filter(function (item) {
             return item === "code";
         });
         return !!(result[0]);

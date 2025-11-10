@@ -7,9 +7,11 @@ import { ErrorResponse } from './ErrorResponse.js';
 import { SigninRequest } from './SigninRequest.js';
 import { SigninResponse } from './SigninResponse.js';
 import { SignoutRequest } from './SignoutRequest.js';
+import { SignoutRequestPost } from './SignoutRequestPost.js';
 import { SignoutResponse } from './SignoutResponse.js';
 import { SigninState } from './SigninState.js';
 import { State } from './State.js';
+import random from './random.js';
 
 export class OidcClient {
     constructor(settings = {}) {
@@ -36,6 +38,13 @@ export class OidcClient {
     }
     get metadataService() {
         return this._metadataService;
+    }
+
+    get _userStore() {
+        return this.settings.userStore;
+    }
+    get _userStoreSsidKey() {
+        return 'sso_Ssid';
     }
 
     createSigninRequest({
@@ -74,25 +83,39 @@ export class OidcClient {
         return this._metadataService.getAuthorizationEndpoint().then(url => {
             Log.debug("OidcClient.createSigninRequest: Received authorization endpoint", url);
 
-            let signinRequest = new SigninRequest({
-                url,
-                client_id,
-                redirect_uri,
-                response_type,
-                scope,
-                data: data || state,
-                authority,
-                prompt, display, max_age, ui_locales, id_token_hint, login_hint, acr_values,
-                resource, request, request_uri, extraQueryParams, extraTokenParams, request_type, response_mode,
-                client_secret: this._settings.client_secret,
-                skipUserInfo
-            });
+            return this._userStore.get(this._userStoreSsidKey).then(storageSsid => {
+                let storageSsidGeneration = Promise.resolve();
+                if (storageSsid) {
+                    Log.debug("Fetch " + this._userStoreSsidKey, storageSsid);
+                } else {
+                    storageSsid = random();
+                    Log.debug("New " + this._userStoreSsidKey, storageSsid);
+                    storageSsidGeneration = this._userStore.set(this._userStoreSsidKey, storageSsid);
+                }
 
-            var signinState = signinRequest.state;
-            stateStore = stateStore || this._stateStore;
+                return storageSsidGeneration.then(() => {
+                    let signinRequest = new SigninRequest({
+                        url,
+                        client_id,
+                        redirect_uri,
+                        response_type,
+                        scope,
+                        data: data || state,
+                        authority,
+                        prompt, display, max_age, ui_locales, id_token_hint, login_hint, acr_values,
+                        resource, request, request_uri, extraQueryParams, extraTokenParams, request_type, response_mode,
+                        client_secret: this._settings.client_secret,
+                        skipUserInfo,
+                        single_session_id: storageSsid
+                    });
 
-            return stateStore.set(signinState.id, signinState.toStorageString()).then(() => {
-                return signinRequest;
+                    var signinState = signinRequest.state;
+                    stateStore = stateStore || this._stateStore;
+
+                    return stateStore.set(signinState.id, signinState.toStorageString()).then(() => {
+                        return signinRequest;
+                    });
+                });
             });
         });
     }
@@ -100,7 +123,7 @@ export class OidcClient {
     readSigninResponseState(url, stateStore, removeState = false) {
         Log.debug("OidcClient.readSigninResponseState");
 
-        let useQuery = this._settings.response_mode === "query" || 
+        let useQuery = this._settings.response_mode === "query" ||
             (!this._settings.response_mode && SigninRequest.isCode(this._settings.response_type));
         let delimiter = useQuery ? "?" : "#";
 
@@ -122,20 +145,20 @@ export class OidcClient {
             }
 
             let state = SigninState.fromStorageString(storedStateString);
-            return {state, response};
+            return { state, response };
         });
     }
 
     processSigninResponse(url, stateStore) {
         Log.debug("OidcClient.processSigninResponse");
 
-        return this.readSigninResponseState(url, stateStore, true).then(({state, response}) => {
+        return this.readSigninResponseState(url, stateStore, true).then(({ state, response }) => {
             Log.debug("OidcClient.processSigninResponse: Received state from storage; validating response");
             return this._validator.validateSigninResponse(state, response);
         });
     }
 
-    createSignoutRequest({id_token_hint, data, state, post_logout_redirect_uri, extraQueryParams, request_type } = {},
+    createSignoutRequest({ id_token_hint, data, state, post_logout_redirect_uri, extraQueryParams, request_type } = {},
         stateStore
     ) {
         Log.debug("OidcClient.createSignoutRequest");
@@ -163,6 +186,43 @@ export class OidcClient {
             var signoutState = request.state;
             if (signoutState) {
                 Log.debug("OidcClient.createSignoutRequest: Signout request has state to persist");
+
+                stateStore = stateStore || this._stateStore;
+                stateStore.set(signoutState.id, signoutState.toStorageString());
+            }
+
+            return request;
+        });
+    }
+
+    createSignoutRequestPost({ id_token_hint, data, state, post_logout_redirect_uri, extraQueryParams, request_type } = {},
+        stateStore
+    ) {
+        Log.debug("OidcClient.createSignoutRequestPost");
+
+        post_logout_redirect_uri = post_logout_redirect_uri || this._settings.post_logout_redirect_uri;
+        extraQueryParams = extraQueryParams || this._settings.extraQueryParams;
+
+        return this._metadataService.getEndSessionEndpoint().then(url => {
+            if (!url) {
+                Log.error("OidcClient.createSignoutRequestPost: No end session endpoint url returned");
+                throw new Error("no end session endpoint");
+            }
+
+            Log.debug("OidcClient.createSignoutRequestPost: Received end session endpoint", url);
+
+            let request = new SignoutRequestPost({
+                url,
+                id_token_hint,
+                post_logout_redirect_uri,
+                data: data || state,
+                extraQueryParams,
+                request_type
+            });
+
+            var signoutState = request.state;
+            if (signoutState) {
+                Log.debug("OidcClient.createSignoutRequestPost: Signout request has state to persist");
 
                 stateStore = stateStore || this._stateStore;
                 stateStore.set(signoutState.id, signoutState.toStorageString());
@@ -200,14 +260,14 @@ export class OidcClient {
 
             let state = State.fromStorageString(storedStateString);
 
-            return {state, response};
+            return { state, response };
         });
     }
 
     processSignoutResponse(url, stateStore) {
         Log.debug("OidcClient.processSignoutResponse");
 
-        return this.readSignoutResponseState(url, stateStore, true).then(({state, response}) => {
+        return this.readSignoutResponseState(url, stateStore, true).then(({ state, response }) => {
             if (state) {
                 Log.debug("OidcClient.processSignoutResponse: Received state from storage; validating response");
                 return this._validator.validateSignoutResponse(state, response);
