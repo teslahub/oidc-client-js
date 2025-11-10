@@ -30,6 +30,7 @@ export class UserManagerSettings extends OidcClientSettings {
         stopCheckSessionOnError = true,
         query_status_response_type,
         revokeAccessTokenOnSignout = false,
+        endsession_get_request = false,
         accessTokenExpiringNotificationTime = DefaultAccessTokenExpiringNotificationTime,
         redirectNavigator = new RedirectNavigator(),
         popupNavigator = new PopupNavigator(),
@@ -64,6 +65,7 @@ export class UserManagerSettings extends OidcClientSettings {
             this._query_status_response_type = "id_token";
         }
         this._revokeAccessTokenOnSignout = revokeAccessTokenOnSignout;
+        this._endsessionGetRequest = endsession_get_request;
 
         this._redirectNavigator = redirectNavigator;
         this._popupNavigator = popupNavigator;

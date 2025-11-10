@@ -7,6 +7,7 @@ import { ErrorResponse } from './ErrorResponse.js';
 import { SigninRequest } from './SigninRequest.js';
 import { SigninResponse } from './SigninResponse.js';
 import { SignoutRequest } from './SignoutRequest.js';
+import { SignoutRequestPost } from './SignoutRequestPost.js';
 import { SignoutResponse } from './SignoutResponse.js';
 import { SigninState } from './SigninState.js';
 import { State } from './State.js';
@@ -185,6 +186,43 @@ export class OidcClient {
             var signoutState = request.state;
             if (signoutState) {
                 Log.debug("OidcClient.createSignoutRequest: Signout request has state to persist");
+
+                stateStore = stateStore || this._stateStore;
+                stateStore.set(signoutState.id, signoutState.toStorageString());
+            }
+
+            return request;
+        });
+    }
+
+    createSignoutRequestPost({ id_token_hint, data, state, post_logout_redirect_uri, extraQueryParams, request_type } = {},
+        stateStore
+    ) {
+        Log.debug("OidcClient.createSignoutRequestPost");
+
+        post_logout_redirect_uri = post_logout_redirect_uri || this._settings.post_logout_redirect_uri;
+        extraQueryParams = extraQueryParams || this._settings.extraQueryParams;
+
+        return this._metadataService.getEndSessionEndpoint().then(url => {
+            if (!url) {
+                Log.error("OidcClient.createSignoutRequestPost: No end session endpoint url returned");
+                throw new Error("no end session endpoint");
+            }
+
+            Log.debug("OidcClient.createSignoutRequestPost: Received end session endpoint", url);
+
+            let request = new SignoutRequestPost({
+                url,
+                id_token_hint,
+                post_logout_redirect_uri,
+                data: data || state,
+                extraQueryParams,
+                request_type
+            });
+
+            var signoutState = request.state;
+            if (signoutState) {
+                Log.debug("OidcClient.createSignoutRequestPost: Signout request has state to persist");
 
                 stateStore = stateStore || this._stateStore;
                 stateStore.set(signoutState.id, signoutState.toStorageString());

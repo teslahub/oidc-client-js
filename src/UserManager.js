@@ -11,6 +11,7 @@ import { SessionMonitor } from './SessionMonitor.js';
 import { TokenRevocationClient } from './TokenRevocationClient.js';
 import { TokenClient } from './TokenClient.js';
 import { JoseUtil } from './JoseUtil.js';
+import { EndSessionClient } from './EndSessionClient.js';
 
 
 export class UserManager extends OidcClient {
@@ -19,7 +20,8 @@ export class UserManager extends OidcClient {
         SessionMonitorCtor = SessionMonitor,
         TokenRevocationClientCtor = TokenRevocationClient,
         TokenClientCtor = TokenClient,
-        joseUtil = JoseUtil
+        joseUtil = JoseUtil,
+        EndSessionClientCtor = EndSessionClient
     ) {
 
         if (!(settings instanceof UserManagerSettings)) {
@@ -43,6 +45,7 @@ export class UserManager extends OidcClient {
 
         this._tokenRevocationClient = new TokenRevocationClientCtor(this._settings);
         this._tokenClient = new TokenClientCtor(this._settings);
+        this._endSessionClient = new EndSessionClientCtor(this._settings);
         this._joseUtil = joseUtil;
     }
 
@@ -507,15 +510,23 @@ export class UserManager extends OidcClient {
                     return this.removeUser().then(() => {
                         Log.debug("UserManager._signoutStart: user removed, creating signout request");
 
-                        return this.createSignoutRequest(args).then(signoutRequest => {
-                            Log.debug("UserManager._signoutStart: got signout request");
+                        if (this._settings._endsessionGetRequest) {
+                            return this.createSignoutRequest(args).then(signoutRequest => {
+                                Log.debug("UserManager._signoutStart: got signout request");
 
-                            navigatorParams.url = signoutRequest.url;
-                            if (signoutRequest.state) {
-                                navigatorParams.id = signoutRequest.state.id;
-                            }
-                            return handle.navigate(navigatorParams);
-                        });
+                                navigatorParams.url = signoutRequest.url;
+                                if (signoutRequest.state) {
+                                    navigatorParams.id = signoutRequest.state.id;
+                                }
+                                return handle.navigate(navigatorParams);
+                            });
+                        } else {
+                            return this.createSignoutRequestPost(args).then(signoutRequest => {
+                                Log.debug("UserManager._signoutStart: got signout request POST");
+
+                                return this._endSessionClient.signout(signoutRequest);
+                            });
+                        }
                     });
                 });
             }).catch(err => {
