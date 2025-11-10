@@ -1,9 +1,9 @@
-/*! (c) Stefan Thomas | https://github.com/bitcoinjs/bitcoinjs-lib
+/*! (c) Stefan Thomas
  */
 /*
- * splitted from bitcoin-lib/ecdsa.js
+ * splitted from ecdsa.js
  *
- * version 1.0.0 is the original of bitcoin-lib/ecdsa.js
+ * version 1.0.0 is the original of ecdsa.js
  */
 ECFieldElementFp.prototype.getByteLength = function () {
   return Math.floor((this.toBigInteger().bitLength() + 7) / 8);
